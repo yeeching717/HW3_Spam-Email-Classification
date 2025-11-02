@@ -49,4 +49,11 @@ Next steps (suggested)
 - Update the OpenSpec proposal and project docs (done) with final metrics and parameters.
 - Optionally deploy the Streamlit demo at `app/streamlit_app.py`.
 
+Live demo
+---------
+
+The Streamlit demo is deployed at:
+
+https://hw3spam-email-classification-lsa7mtewxuzdojg82caung.streamlit.app/
+
 If you want, I can add a minimal test suite + CI workflow next.

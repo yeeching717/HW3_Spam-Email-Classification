@@ -380,14 +380,14 @@ def main():
     
     # Train model with current parameters
     model, vec = train_model_with_params(test_size, random_seed)
-    if model is None or vec is None:
+    '''if model is None or vec is None:
         st.error("Failed to initialize model with the selected parameters.")
         return(
         "Random Seed",
         value=42,
         min_value=0,
         help="Random seed for reproducibility"
-    )
+    )'''
     
     st.session_state['decision_threshold'] = st.sidebar.slider(
         "Decision Threshold",

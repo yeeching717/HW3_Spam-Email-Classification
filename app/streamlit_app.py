@@ -383,21 +383,6 @@ def main():
     if model is None or vec is None:
         st.error("Failed to initialize model with the selected parameters.")
         return
-        
-    # Add model parameter controls to sidebar
-    st.sidebar.subheader("Model Parameters")
-    
-    # Store parameters in session state
-    st.session_state['test_size'] = st.sidebar.slider(
-        "Test Size",
-        min_value=0.1,
-        max_value=0.5,
-        value=0.2,
-        step=0.05,
-        help="Proportion of dataset to include in the test split"
-    )
-    
-    st.session_state['random_seed'] = st.sidebar.number_input(
         "Random Seed",
         value=42,
         min_value=0,

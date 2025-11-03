@@ -11,17 +11,6 @@ import seaborn as sns
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def load_proposal_md() -> str:
-    proposal_path = (
-        REPO_ROOT
-        / "openspec"
-        / "changes"
-        / "add-spam-classification-baseline"
-        / "proposal.md"
-    )
-    if not proposal_path.exists():
-        return f"# Proposal file not found\n\nExpected: {proposal_path}"
-    return proposal_path.read_text(encoding="utf-8")
 
 
 @st.cache_resource
@@ -126,7 +115,7 @@ def demo_tab():
                     st.write(f"Confidence: {pr:.3f}")
 
     st.subheader("Batch upload (CSV)")
-    st.markdown("Upload a CSV with a column that contains messages (e.g., 'text').")
+    st.markdown("Upload a CSV with columns for text data and labels.")
     uploaded = st.file_uploader("Upload CSV file", type=["csv"])
     if uploaded is not None:
         try:
@@ -134,7 +123,12 @@ def demo_tab():
         except Exception:
             st.error("Failed to read CSV. Ensure it's a valid CSV file.")
             return
-        text_col = st.selectbox("Select text column", options=df.columns.tolist(), index=0)
+            
+        # Add column selectors to sidebar
+        st.sidebar.subheader("Data Column Selection")
+        text_col = st.sidebar.selectbox("Select Text Column", options=df.columns.tolist(), index=0)
+        label_col = st.sidebar.selectbox("Select Label Column", options=df.columns.tolist(), index=min(1, len(df.columns)-1))
+        
         if st.button("Run batch prediction"):
             out = batch_predict_df(model, vec, df, text_col)
             st.dataframe(out.head(50))
@@ -147,54 +141,14 @@ def demo_tab():
     show_metrics_panel(model, vec)
 
 
-def proposal_tab():
-    st.header("Proposal")
-    md = load_proposal_md()
-    st.markdown(md, unsafe_allow_html=False)
-
-
 def main():
     st.set_page_config(page_title="Spam classifier demo", layout="wide")
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Demo", "Proposal"]) 
-    if page == "Demo":
-        demo_tab()
-    else:
-        proposal_tab()
+    st.sidebar.title("Spam Email Classification")
+    demo_tab()
 
 
 if __name__ == "__main__":
     main()
-from pathlib import Path
-import streamlit as st
-
-
-def load_proposal_md() -> str:
-    # proposal is under openspec/changes/add-spam-classification-baseline/proposal.md
-    repo_root = Path(__file__).resolve().parent.parent
-    proposal_path = (
-        repo_root
-        / "openspec"
-        / "changes"
-        / "add-spam-classification-baseline"
-        / "proposal.md"
-    )
-    if not proposal_path.exists():
-        return "# Proposal file not found\n\nExpected: {}".format(proposal_path)
-    return proposal_path.read_text(encoding="utf-8")
-
-
-def main():
-    st.set_page_config(page_title="Spam classification proposal", layout="wide")
-    st.title("Add: Spam Classification Baseline — Proposal")
-
-    st.sidebar.header("Proposal viewer")
-    st.sidebar.markdown("Displays the change proposal from the `openspec` folder.")
-
-    md = load_proposal_md()
-
-    # render markdown
-    st.markdown(md, unsafe_allow_html=False)
 
 
 if __name__ == "__main__":

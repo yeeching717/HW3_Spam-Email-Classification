@@ -1,5 +1,6 @@
 from pathlib import Path
 import io
+import sys
 import joblib
 import numpy as np
 import pandas as pd
@@ -14,6 +15,10 @@ from sklearn.metrics import (
 from sklearn.metrics import ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Add project root to Python path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

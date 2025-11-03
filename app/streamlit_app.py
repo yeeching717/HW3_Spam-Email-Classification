@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 @st.cache_resource
 def load_artifacts():
+    """Load base model and vectorizer."""
     model_path = REPO_ROOT / "models" / "spam_classifier.joblib"
     vec_path = REPO_ROOT / "models" / "tfidf_vectorizer.joblib"
     model = None
@@ -35,6 +36,54 @@ def load_artifacts():
             model = None
             vec = None
     return model, vec
+
+
+@st.cache_resource
+def train_model_with_params(test_size: float, random_seed: int):
+    """Train model with user-specified parameters."""
+    from src.data_processor import DataProcessor
+    from src.spam_classifier import SpamClassifier
+    
+    # Initialize with user parameters
+    data_processor = DataProcessor(
+        random_state=random_seed,
+        ngram_range=(1,2),
+        min_df=2,
+        sublinear_tf=True
+    )
+    
+    classifier = SpamClassifier(
+        penalty='l1',
+        C=10.0,
+        solver='liblinear',
+        class_weight='balanced',
+        random_state=random_seed
+    )
+    
+    # Load and prepare data
+    data_path = REPO_ROOT / "data" / "spam_dataset.csv"
+    if not data_path.exists():
+        st.error("Dataset not found. Please run setup scripts first.")
+        return None, None
+        
+    df = data_processor.load_data(data_path)
+    if df is None:
+        st.error("Failed to load dataset.")
+        return None, None
+        
+    # Prepare data with user-specified test_size
+    X_train, X_test, y_train, y_test = data_processor.prepare_data(df, test_size=test_size)
+    if X_train is None:
+        st.error("Failed to prepare data.")
+        return None, None
+        
+    # Train model
+    success = classifier.train(X_train, y_train)
+    if not success:
+        st.error("Failed to train model.")
+        return None, None
+        
+    return classifier.model, data_processor.vectorizer
 
 
 def predict_message(model, vec, text: str):
@@ -295,10 +344,39 @@ def main():
     # Configure sidebar
     st.sidebar.title("Spam Email Classification")
     
-    # Load model and vectorizer first
-    model, vec = load_artifacts()
+    # Add model parameter controls to sidebar
+    st.sidebar.subheader("Model Parameters")
+    
+    # Store parameters in session state
+    test_size = st.sidebar.slider(
+        "Test Size",
+        min_value=0.1,
+        max_value=0.5,
+        value=0.2,
+        step=0.05,
+        help="Proportion of dataset to include in the test split"
+    )
+    
+    random_seed = st.sidebar.number_input(
+        "Random Seed",
+        value=42,
+        min_value=0,
+        help="Random seed for reproducibility"
+    )
+    
+    st.session_state['decision_threshold'] = st.sidebar.slider(
+        "Decision Threshold",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.5,
+        step=0.01,
+        help="Probability threshold for classification"
+    )
+    
+    # Train model with current parameters
+    model, vec = train_model_with_params(test_size, random_seed)
     if model is None or vec is None:
-        st.error("Model or vectorizer not found in `models/`. Run `python src/train.py` to produce artifacts.")
+        st.error("Failed to initialize model with the selected parameters.")
         return
         
     # Add model parameter controls to sidebar

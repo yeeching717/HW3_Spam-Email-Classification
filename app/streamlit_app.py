@@ -56,15 +56,20 @@ def predict_message(model, vec, text: str):
 def batch_predict_df(model, vec, df: pd.DataFrame, text_col: str):
     texts = df[text_col].astype(str).tolist()
     X = vec.transform(texts)
-    preds = model.predict(X)
+    
     try:
-        probs = model.predict_proba(X).max(axis=1)
+        # Get probabilities for positive class
+        probs = model.predict_proba(X)[:, 1]
+        # Use threshold from session state
+        threshold = st.session_state.get('decision_threshold', 0.5)
+        preds = (probs >= threshold).astype(int)
+        out = df.copy()
+        out["prediction"] = ["spam" if p else "ham" for p in preds]
+        out["probability"] = probs
+        return out
     except Exception:
-        probs = [None] * len(preds)
-    out = df.copy()
-    out["prediction"] = preds
-    out["probability"] = probs
-    return out
+        st.error("Failed to make predictions. Check if model supports predict_proba.")
+        return None
 
 
 def get_top_tokens(model, vectorizer, n_top=15):
@@ -88,33 +93,39 @@ def get_top_tokens(model, vectorizer, n_top=15):
 
 def show_top_tokens(model, vec):
     """Display top tokens visualization."""
-    st.subheader("Top Tokens by Class")
+    st.header("Top Tokens by Class")
     
     spam_tokens, ham_tokens = get_top_tokens(model, vec)
     if spam_tokens is None or ham_tokens is None:
         st.warning("Could not extract feature importance from the model.")
         return
-        
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     
-    # Plot spam tokens
-    tokens, coeffs = zip(*spam_tokens)
-    ax1.barh(range(len(tokens)), coeffs)
-    ax1.set_yticks(range(len(tokens)))
-    ax1.set_yticklabels(tokens)
-    ax1.set_title("Top Spam Indicators")
-    ax1.set_xlabel("Coefficient Value")
+    # Use columns for better layout
+    col1, col2 = st.columns(2)
     
-    # Plot ham tokens
-    tokens, coeffs = zip(*ham_tokens)
-    ax2.barh(range(len(tokens)), coeffs)
-    ax2.set_yticks(range(len(tokens)))
-    ax2.set_yticklabels(tokens)
-    ax2.set_title("Top Non-Spam Indicators")
-    ax2.set_xlabel("Coefficient Value")
+    with col1:
+        st.subheader("Top 'Not Spam' Tokens")
+        fig1, ax1 = plt.subplots(figsize=(6, 4))
+        tokens, coeffs = zip(*ham_tokens)
+        colors = ['#2ecc71' if c < 0 else '#e74c3c' for c in coeffs]
+        ax1.barh(range(len(tokens)), coeffs, color=colors)
+        ax1.set_yticks(range(len(tokens)))
+        ax1.set_yticklabels(tokens)
+        ax1.set_xlabel("Coefficient Value")
+        plt.tight_layout()
+        st.pyplot(fig1)
     
-    plt.tight_layout()
-    st.pyplot(fig)
+    with col2:
+        st.subheader("Top 'Spam' Tokens")
+        fig2, ax2 = plt.subplots(figsize=(6, 4))
+        tokens, coeffs = zip(*spam_tokens)
+        colors = ['#2ecc71' if c < 0 else '#e74c3c' for c in coeffs]
+        ax2.barh(range(len(tokens)), coeffs, color=colors)
+        ax2.set_yticks(range(len(tokens)))
+        ax2.set_yticklabels(tokens)
+        ax2.set_xlabel("Coefficient Value")
+        plt.tight_layout()
+        st.pyplot(fig2)
 
 
 def get_model_predictions(model, X):
@@ -275,12 +286,26 @@ def demo_tab():
 
 
 def main():
-    st.set_page_config(page_title="Spam classifier demo", layout="wide")
+    st.set_page_config(
+        page_title="Spam Email Classification",
+        page_icon="✉️",
+        layout="wide"
+    )
+    
+    # Configure sidebar
     st.sidebar.title("Spam Email Classification")
     
+    # Load model and vectorizer first
+    model, vec = load_artifacts()
+    if model is None or vec is None:
+        st.error("Model or vectorizer not found in `models/`. Run `python src/train.py` to produce artifacts.")
+        return
+        
     # Add model parameter controls to sidebar
     st.sidebar.subheader("Model Parameters")
-    test_size = st.sidebar.slider(
+    
+    # Store parameters in session state
+    st.session_state['test_size'] = st.sidebar.slider(
         "Test Size",
         min_value=0.1,
         max_value=0.5,
@@ -289,14 +314,14 @@ def main():
         help="Proportion of dataset to include in the test split"
     )
     
-    random_seed = st.sidebar.number_input(
+    st.session_state['random_seed'] = st.sidebar.number_input(
         "Random Seed",
         value=42,
         min_value=0,
         help="Random seed for reproducibility"
     )
     
-    decision_threshold = st.sidebar.slider(
+    st.session_state['decision_threshold'] = st.sidebar.slider(
         "Decision Threshold",
         min_value=0.0,
         max_value=1.0,
@@ -305,7 +330,67 @@ def main():
         help="Probability threshold for classification"
     )
     
-    demo_tab()
+    # Main content area
+    st.title("Spam Email Classification")
+    
+    # Show visualizations first
+    show_top_tokens(model, vec)
+    show_metrics_panel(model, vec)
+    
+    # Single message classification
+    st.header("Single Message Classification")
+    text_input = st.text_area(
+        "Enter a message to classify",
+        value="Enter your message here...",
+        height=100
+    )
+    
+    if st.button("Classify Message"):
+        if text_input and text_input != "Enter your message here...":
+            pred, prob = predict_message(model, vec, text_input)
+            if pred:
+                st.write(f"Classification: **{pred.upper()}**")
+                st.write(f"Confidence: **{prob:.2%}**")
+        else:
+            st.warning("Please enter a message to classify.")
+            
+    # Batch classification
+    st.header("Batch Classification")
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+    
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.sidebar.subheader("Data Column Selection")
+            text_col = st.sidebar.selectbox(
+                "Select Text Column",
+                options=df.columns.tolist(),
+                index=0
+            )
+            label_col = st.sidebar.selectbox(
+                "Select Label Column",
+                options=df.columns.tolist(),
+                index=min(1, len(df.columns)-1)
+            )
+            
+            if st.button("Run Batch Classification"):
+                results = batch_predict_df(model, vec, df, text_col)
+                if results is not None:
+                    st.write("Preview of classification results:")
+                    st.dataframe(results.head())
+                    
+                    # Download button for results
+                    csv = results.to_csv(index=False)
+                    st.download_button(
+                        "Download Results",
+                        csv,
+                        "spam_classification_results.csv",
+                        "text/csv",
+                        key='download-csv'
+                    )
+                    
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
 
 
 if __name__ == "__main__":

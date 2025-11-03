@@ -165,7 +165,7 @@ def get_evaluation_data(df, _vec, _model, text_col, label_col, test_size, random
     "我們知道這些參數不會變，不用檢查它們的變化"，
     這能提高快取的效率。
     """
-    st.write(f"快取失效，正在以 Test Size={test_size}, Seed={random_seed} 重新計算預測結果...")
+    #st.write(f"快取失效，正在以 Test Size={test_size}, Seed={random_seed} 重新計算預測結果...")
     
     X = _vec.transform(df[text_col].astype(str).tolist())
     y_true = df[label_col].values
@@ -252,10 +252,10 @@ def show_metrics_panel(model, vec, test_size, random_seed, decision_threshold):
     
     # 分類報告
     st.subheader("Classification Report")
-    report_str = classification_report(y_true, y_pred, target_names=['Ham', 'Spam'])
-    st.text(report_str)
-    # report = classification_report(y_true, y_pred, output_dict=True, target_names=['Ham', 'Spam'])
-    # st.write(pd.DataFrame(report).transpose())
+    # report_str = classification_report(y_true, y_pred, target_names=['Ham', 'Spam'])
+    # st.text(report_str)
+    report = classification_report(y_true, y_pred, output_dict=True, target_names=['Ham', 'Spam'])
+    st.write(pd.DataFrame(report).transpose())
     
     # 閾值掃描分析 (Threshold Sweep Analysis)
     # 這裡的 y_true 和 y_pred_proba 都是正確的 (來自測試集)
@@ -362,44 +362,6 @@ def main():
         else:
             st.warning("Please enter a message to classify.")
             
-    st.header("Batch Classification")
-    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
-    
-    if uploaded_file:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.sidebar.subheader("Data Column Selection")
-            text_col = st.sidebar.selectbox(
-                "Select Text Column",
-                options=df.columns.tolist(),
-                index=0,
-                key="batch_text_col" # 新增 key 避免衝突
-            )
-            label_col = st.sidebar.selectbox(
-                "Select Label Column",
-                options=df.columns.tolist(),
-                index=min(1, len(df.columns)-1),
-                key="batch_label_col" # 新增 key 避免衝突
-            )
-            
-            if st.button("Run Batch Classification"):
-                results = batch_predict_df(model, vec, df, text_col)
-                if results is not None:
-                    st.write("Preview of classification results:")
-                    st.dataframe(results.head())
-                    
-                    csv = results.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        "Download Results",
-                        csv,
-                        "spam_classification_results.csv",
-                        "text/csv",
-                        key='download-csv'
-                    )
-                    
-        except Exception as e:
-            st.error(f"Error processing file: {str(e)}")
-
 
 if __name__ == "__main__":
     main()

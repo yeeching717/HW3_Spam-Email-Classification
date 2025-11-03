@@ -46,6 +46,11 @@ C:/Users/User/anaconda3/Scripts/conda.exe run -p C:\Users\User\Desktop\IoTHW3\.c
 ```powershell
 C:/Users/User/anaconda3/Scripts/conda.exe run -p C:\Users\User\Desktop\IoTHW3\.conda --no-capture-output streamlit run app/streamlit_app.py
 ```
+DEMO
+-------
+
+https://hw3spam-email-classification-lsa7mtewxuzdojg82caung.streamlit.app/
+
 
 主要功能
 --------

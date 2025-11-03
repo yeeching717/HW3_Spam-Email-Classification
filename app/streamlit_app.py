@@ -1,17 +1,9 @@
 from pathlib import Path
 import io
 import joblib
-import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.metrics import (
-    classification_report, 
-    confusion_matrix,
-    roc_curve,
-    auc,
-    precision_recall_fscore_support
-)
-from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -41,16 +33,13 @@ def predict_message(model, vec, text: str):
     if model is None or vec is None:
         return None, None
     X = vec.transform([text])
-    
+    pred = model.predict(X)[0]
+    prob = None
     try:
-        probs = model.predict_proba(X)[0]
-        prob = float(probs.max())
-        # Use the sidebar threshold for prediction
-        threshold = st.session_state.get('decision_threshold', 0.5)
-        pred = 'spam' if probs[1] >= threshold else 'ham'
-        return pred, prob
+        prob = float(model.predict_proba(X)[0].max())
     except Exception:
-        return None, None
+        prob = None
+    return pred, prob
 
 
 def batch_predict_df(model, vec, df: pd.DataFrame, text_col: str):
@@ -67,146 +56,27 @@ def batch_predict_df(model, vec, df: pd.DataFrame, text_col: str):
     return out
 
 
-def get_top_tokens(model, vectorizer, n_top=15):
-    """Get top N tokens for each class based on model coefficients."""
-    if not hasattr(model, 'coef_'):
-        return None, None
-    
-    feature_names = vectorizer.get_feature_names_out()
-    coef = model.coef_[0]  # For binary classification
-    
-    # Get indices of top positive (spam) and negative (non-spam) coefficients
-    top_spam_idx = np.argsort(coef)[-n_top:]
-    top_ham_idx = np.argsort(coef)[:n_top]
-    
-    # Get tokens and their coefficients
-    spam_tokens = [(feature_names[i], coef[i]) for i in top_spam_idx]
-    ham_tokens = [(feature_names[i], coef[i]) for i in top_ham_idx]
-    
-    return spam_tokens[::-1], ham_tokens[::-1]  # Reverse to get descending order
-
-
-def show_top_tokens(model, vec):
-    """Display top tokens visualization."""
-    st.subheader("Top Tokens by Class")
-    
-    spam_tokens, ham_tokens = get_top_tokens(model, vec)
-    if spam_tokens is None or ham_tokens is None:
-        st.warning("Could not extract feature importance from the model.")
-        return
-        
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    
-    # Plot spam tokens
-    tokens, coeffs = zip(*spam_tokens)
-    ax1.barh(range(len(tokens)), coeffs)
-    ax1.set_yticks(range(len(tokens)))
-    ax1.set_yticklabels(tokens)
-    ax1.set_title("Top Spam Indicators")
-    ax1.set_xlabel("Coefficient Value")
-    
-    # Plot ham tokens
-    tokens, coeffs = zip(*ham_tokens)
-    ax2.barh(range(len(tokens)), coeffs)
-    ax2.set_yticks(range(len(tokens)))
-    ax2.set_yticklabels(tokens)
-    ax2.set_title("Top Non-Spam Indicators")
-    ax2.set_xlabel("Coefficient Value")
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-
-
-def get_model_predictions(model, X):
-    """Get both binary predictions and probabilities."""
-    y_pred_proba = model.predict_proba(X)
-    return y_pred_proba[:, 1]  # Return probabilities for positive class
-
 def show_metrics_panel(model, vec):
     processed = REPO_ROOT / "datasets" / "processed" / "sms_spam_clean.csv"
     if not processed.exists():
         st.info("Processed dataset not found — cannot show metrics. Run `python src/train.py` to create it.")
         return
-    
     df = pd.read_csv(processed)
     if "text_clean" not in df.columns or "label" not in df.columns:
         st.warning("Processed dataset missing expected columns: 'text_clean' and 'label'.")
         return
-        
     X = vec.transform(df["text_clean"].astype(str).tolist())
     y_true = df["label"].values
-    
-    # Get probabilities for positive class
-    y_pred_proba = get_model_predictions(model, X)
-    
-    # Get current threshold from session state
-    threshold = st.session_state.get('decision_threshold', 0.5)
-    
-    # Make predictions using current threshold
-    y_pred = (y_pred_proba >= threshold).astype(int)
-    
-    st.subheader("Model Performance")
-    
-    # Create two columns for visualizations
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Confusion Matrix
-        fig_cm, ax_cm = plt.subplots(figsize=(4, 4))
-        ConfusionMatrixDisplay.from_predictions(
-            y_true,
-            y_pred,
-            ax=ax_cm,
-            cmap='Blues',
-            display_labels=['Ham', 'Spam']
-        )
-        ax_cm.set_title(f'Confusion Matrix\n(threshold={threshold:.2f})')
-        st.pyplot(fig_cm)
-        
-    with col2:
-        # ROC Curve
-        fpr, tpr, _ = roc_curve(y_true, y_pred_proba)
-        roc_auc = auc(fpr, tpr)
-        
-        fig_roc, ax_roc = plt.subplots(figsize=(4, 4))
-        ax_roc.plot(fpr, tpr, color='darkorange', lw=2, 
-                   label=f'ROC curve (AUC = {roc_auc:.2f})')
-        ax_roc.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-        ax_roc.set_xlim([0.0, 1.0])
-        ax_roc.set_ylim([0.0, 1.05])
-        ax_roc.set_xlabel('False Positive Rate')
-        ax_roc.set_ylabel('True Positive Rate')
-        ax_roc.set_title('Receiver Operating Characteristic')
-        ax_roc.legend(loc="lower right")
-        st.pyplot(fig_roc)
-    
-    # Classification Report
-    st.subheader("Classification Report")
+    y_pred = model.predict(X)
+    st.subheader("Model metrics on processed dataset")
     report = classification_report(y_true, y_pred, output_dict=True)
     st.write(pd.DataFrame(report).transpose())
-    
-    # Threshold Sweep Analysis
-    st.subheader("Threshold Sweep Analysis")
-    thresholds = np.arange(0.1, 1.0, 0.1)
-    sweep_results = []
-    
-    for t in thresholds:
-        y_pred_t = (y_pred_proba >= t).astype(int)
-        precision, recall, f1, _ = precision_recall_fscore_support(
-            y_true, y_pred_t, average='binary', zero_division=0
-        )
-        sweep_results.append({
-            'Threshold': f'{t:.1f}',
-            'Precision': f'{precision:.3f}',
-            'Recall': f'{recall:.3f}',
-            'F1-Score': f'{f1:.3f}'
-        })
-    
-    sweep_df = pd.DataFrame(sweep_results)
-    st.dataframe(
-        sweep_df.style.highlight_max(subset=['F1-Score'], axis=0),
-        hide_index=True
-    )
+    cm = confusion_matrix(y_true, y_pred)
+    fig, ax = plt.subplots(figsize=(4, 3))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    st.pyplot(fig)
 
 
 def demo_tab():
@@ -215,9 +85,6 @@ def demo_tab():
     if model is None or vec is None:
         st.error("Model or vectorizer not found in `models/`. Run `python src/train.py` to produce artifacts.")
         return
-    
-    # Show top tokens visualization first
-    show_top_tokens(model, vec)
 
     st.subheader("Single message")
     sample_text = st.text_area("Enter a message to classify", value="Free entry text here")
@@ -277,35 +144,11 @@ def demo_tab():
 def main():
     st.set_page_config(page_title="Spam classifier demo", layout="wide")
     st.sidebar.title("Spam Email Classification")
-    
-    # Add model parameter controls to sidebar
-    st.sidebar.subheader("Model Parameters")
-    test_size = st.sidebar.slider(
-        "Test Size",
-        min_value=0.1,
-        max_value=0.5,
-        value=0.2,
-        step=0.05,
-        help="Proportion of dataset to include in the test split"
-    )
-    
-    random_seed = st.sidebar.number_input(
-        "Random Seed",
-        value=42,
-        min_value=0,
-        help="Random seed for reproducibility"
-    )
-    
-    decision_threshold = st.sidebar.slider(
-        "Decision Threshold",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.5,
-        step=0.01,
-        help="Probability threshold for classification"
-    )
-    
     demo_tab()
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":

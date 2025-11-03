@@ -29,6 +29,11 @@ Troubleshooting
  - If the app fails to start, check the "Logs" tab in Streamlit Cloud for stack traces.
  - Ensure `requirements.txt` contains all runtime dependencies (we added `streamlit>=1.0`).
  - If you prefer pinned versions for deterministic builds, update `requirements.txt` to pin exact package versions.
+ - Module import errors:
+   - The app requires the `src` directory to be in the Python path
+   - We've added `__init__.py` to make `src` a proper Python package
+   - The app automatically adds the project root to `sys.path`
+   - If still seeing import errors, try restarting the app in Streamlit Cloud
 
 Advanced: automated deploy via GitHub Actions
  - Streamlit Cloud currently deploys via its UI when linked to the repository. For CI-based or alternative hosting, consider:

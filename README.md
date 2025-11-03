@@ -80,5 +80,3 @@ C:/Users/User/anaconda3/Scripts/conda.exe run -p C:\Users\User\Desktop\IoTHW3\.c
 - 新增單元測試（pytest）和 GitHub Actions CI
 - 增加資料與輸入驗證、更多前處理步驟
 - 嘗試其他模型（RandomForest, XGBoost）與更完整的超參數搜尋
-
-如果你想，我可以幫你再把 README 翻成英文版本，或加入更多範例與指令。

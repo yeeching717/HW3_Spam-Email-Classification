@@ -382,7 +382,7 @@ def main():
     model, vec = train_model_with_params(test_size, random_seed)
     if model is None or vec is None:
         st.error("Failed to initialize model with the selected parameters.")
-        return
+        return(
         "Random Seed",
         value=42,
         min_value=0,
